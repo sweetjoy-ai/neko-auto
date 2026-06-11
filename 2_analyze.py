@@ -95,7 +95,7 @@ def run_keyword_analysis(posts: list[dict], trends: list[dict]) -> str:
 오늘 특별히 눈에 띄는 이슈나 화제
 """
 
-    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
     return response.text
 
 
@@ -137,7 +137,7 @@ def generate_episode_script(idea: str) -> str:
 ## 🏷️ 추천 해시태그 (일본어 5개 + 한국어 3개)
 ## 📌 촬영 포인트
 """
-    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
     return response.text
 
 
