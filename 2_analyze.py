@@ -49,9 +49,8 @@ def load_today_trends() -> list[dict]:
 
 # ── Gemini 분석 ────────────────────────────────────────────────────────────
 def run_keyword_analysis(posts: list[dict], trends: list[dict]) -> str:
-    import google.generativeai as genai
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash-exp")
+    from google import genai
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
     posts_text = "\n".join(
         f"- [{p['source']}] {p['title']} (👍{p['likes']} 👁{p['views']})"
@@ -96,16 +95,15 @@ def run_keyword_analysis(posts: list[dict], trends: list[dict]) -> str:
 오늘 특별히 눈에 띄는 이슈나 화제
 """
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
     return response.text
 
 
 # ── 에피소드 대본 생성 ─────────────────────────────────────────────────────
 def generate_episode_script(idea: str) -> str:
     """선택된 에피소드 아이디어로 일본어 숏폼 대본 생성"""
-    import google.generativeai as genai
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash-exp")
+    from google import genai
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
     prompt = f"""
 당신은 일본어 숏폼 유튜브 채널의 대본 작가입니다.
@@ -139,7 +137,7 @@ def generate_episode_script(idea: str) -> str:
 ## 🏷️ 추천 해시태그 (일본어 5개 + 한국어 3개)
 ## 📌 촬영 포인트
 """
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
     return response.text
 
 
