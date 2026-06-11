@@ -41,12 +41,15 @@ html, body, .stApp, [data-testid="stAppViewContainer"],
     font-family: 'Noto Sans KR', sans-serif;
 }
 
-/* Streamlit 상단 보라색 바 제거 */
-[data-testid="stDecoration"] { display: none !important; }
-header[data-testid="stHeader"] { background: #faf7f2 !important; border-bottom: 1px solid #e8e0d4; }
+/* Streamlit 상단 바 / 툴바 / 점3개 메뉴 전부 숨김 */
+[data-testid="stDecoration"]    { display: none !important; }
+[data-testid="stToolbar"]       { display: none !important; }
+[data-testid="stToolbarActions"]{ display: none !important; }
+[data-testid="stHeader"]        { background: #faf7f2 !important; height: 0 !important; min-height: 0 !important; }
+header[data-testid="stHeader"] *{ display: none !important; }
 
-/* 메인 컨텐츠 영역 */
-.block-container { padding-top: 1rem !important; max-width: 1100px; }
+/* 메인 컨텐츠 영역 — 헤더 숨겼으니 위 여백 줄임 */
+.block-container { padding-top: 2rem !important; max-width: 1100px; }
 
 /* 사이드바 */
 [data-testid="stSidebar"] { background: #f4efe6 !important; border-right: 1px solid #e8e0d4; }
@@ -94,17 +97,12 @@ CHAR_IMG = BASE_DIR / "static" / "mochi.png"
 col_img, col_title = st.columns([1, 6])
 with col_img:
     if CHAR_IMG.exists():
-        img_b64 = base64.b64encode(CHAR_IMG.read_bytes()).decode()
-        st.markdown(
-            f'<img src="data:image/png;base64,{img_b64}" '
-            f'style="width:90px; height:90px; object-fit:contain; margin-top:4px;">',
-            unsafe_allow_html=True
-        )
+        st.image(str(CHAR_IMG), width=100)
     else:
-        st.markdown('<div style="font-size:64px; line-height:1;">🐱</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:64px; line-height:1; padding-top:8px;">🐱</div>', unsafe_allow_html=True)
 with col_title:
     st.markdown("""
-    <div style="padding-top:8px;">
+    <div style="padding-top:12px;">
       <div style="font-size:11px; color:#a89880; letter-spacing:2px; text-transform:uppercase; margin-bottom:4px;">YouTube · 일본어 숏폼</div>
       <div style="font-family:'DM Serif Display',serif; font-size:30px; font-style:italic; color:#2a2118;">모찌냥</div>
       <div style="font-size:12px; color:#a89880; margin-top:2px;">반려묘 집사 공감 콘텐츠 자동화</div>
