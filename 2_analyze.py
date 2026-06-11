@@ -49,7 +49,7 @@ def load_today_trends() -> list[dict]:
 # ── Gemini 분석 ────────────────────────────────────────────────────────────
 def run_keyword_analysis(posts: list[dict], trends: list[dict]) -> str:
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash")
 
     posts_text = "\n".join(
         f"- [{p['source']}] {p['title']} (👍{p['likes']} 👁{p['views']})"
@@ -102,7 +102,7 @@ def run_keyword_analysis(posts: list[dict], trends: list[dict]) -> str:
 def generate_episode_script(idea: str) -> str:
     """선택된 에피소드 아이디어로 일본어 숏폼 대본 생성"""
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash")
 
     prompt = f"""
 당신은 일본어 숏폼 유튜브 채널의 대본 작가입니다.
