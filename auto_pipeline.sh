@@ -3,7 +3,7 @@
 # 크론: 0 0,12 * * * (09:00, 21:00 KST)
 
 set -euo pipefail
-APP="/home/ubuntu/neko-auto"
+APP="/home/ubuntu/mochi-nyang"
 LOG="$APP/data/pipeline.log"
 
 cd "$APP"

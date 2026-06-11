@@ -1,6 +1,6 @@
 """
 neko-auto — Streamlit 대시보드
-실행: streamlit run dashboard.py --server.port 8502 --server.baseUrlPath youtube/channel1
+실행: streamlit run dashboard.py --server.port 8502 --server.baseUrlPath youtube/mochi-nyang
 """
 
 import json
@@ -43,7 +43,7 @@ st.markdown("""
   <span style="margin:0 6px; color:#ccc;">›</span>
   <a href="https://spacejoy.withlinkus.com/youtube" style="color:#b8895a; text-decoration:none;">youtube</a>
   <span style="margin:0 6px; color:#ccc;">›</span>
-  <span style="color:#555;">channel1 · neko</span>
+  <span style="color:#555;">mochi-nyang</span>
 </div>
 """, unsafe_allow_html=True)
 
