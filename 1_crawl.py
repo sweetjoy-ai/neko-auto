@@ -1,18 +1,20 @@
 """
 mochi-nyang — STEP 1: 일본 반려묘 커뮤니티 크롤링
-수집처: 5ch猫板, ガールズちゃんねる, ニコニコ動画, Google Trends(JP)
+수집처: ニコニコ動画API, はてなブックマーク, Yahoo Japan RSS, Google Trends JP
+※ 5ch / ガールズちゃんねる / Nitter는 해외 IP 차단으로 제외
 실행: python3 1_crawl.py [YYMMDD]
 """
 
 import json
 import re
 import sqlite3
-import subprocess
 import sys
 import time
 import random
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 from bs4 import BeautifulSoup
@@ -40,28 +42,18 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS posts (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            date      TEXT,
-            source    TEXT,
-            category  TEXT,
-            title     TEXT,
-            content   TEXT,
-            url       TEXT UNIQUE,
-            views     INTEGER DEFAULT 0,
-            likes     INTEGER DEFAULT 0,
-            comments  INTEGER DEFAULT 0,
-            crawled_at TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT, source TEXT, category TEXT,
+            title TEXT, content TEXT, url TEXT UNIQUE,
+            views INTEGER DEFAULT 0, likes INTEGER DEFAULT 0,
+            comments INTEGER DEFAULT 0, crawled_at TEXT
         )
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS trends (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            date     TEXT,
-            source   TEXT,
-            keyword  TEXT,
-            rank     INTEGER,
-            related  TEXT,
-            crawled_at TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT, source TEXT, keyword TEXT,
+            rank INTEGER, related TEXT, crawled_at TEXT
         )
     """)
     conn.commit()
@@ -100,236 +92,194 @@ def save_trends(trends: list[dict]):
     conn.close()
 
 
-# ── 1. 5ch 猫板 ────────────────────────────────────────────────────────────
-def crawl_5ch_cat() -> list[dict]:
-    """5ch猫板 — 인기 스레드 수집 (날 것의 집사 감정)"""
+# ── 1. ニコニコ動画 猫 인기영상 (API) ─────────────────────────────────────
+def crawl_nicovideo() -> list[dict]:
+    """ニコニコ動画 공개 API — 猫 태그 인기영상"""
     results = []
     now = datetime.now().isoformat()
 
-    urls = [
-        ("cat",   "https://neko.5ch.net/cat/"),       # 猫板
-        ("peko",  "https://peko.5ch.net/cat/"),        # 미러
+    queries = [
+        ("猫 あるある",  "cat_daily"),
+        ("猫 ツンデレ",  "cat_tsundere"),
+        ("猫 テレワーク","cat_telework"),
+        ("猫 集合",     "cat_compilation"),
     ]
 
-    for board_id, url in urls:
+    api = "https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search"
+
+    for q_text, category in queries:
         try:
-            resp = requests.get(url, headers=HEADERS, timeout=15)
-            resp.encoding = "utf-8"
-            soup = BeautifulSoup(resp.text, "html.parser")
+            params = {
+                "q": q_text,
+                "targets": "tags,description",
+                "fields": "contentId,title,description,viewCounter,commentCounter,likeCounter",
+                "_sort": "-viewCounter",
+                "_limit": 10,
+                "_context": "mochi-nyang",
+            }
+            resp = requests.get(api, params=params, headers=HEADERS, timeout=15)
+            data = resp.json()
 
-            # 스레드 목록
-            threads = soup.select("div.thread") or soup.select("tr.thread")
-            if not threads:
-                # 일반 목록 형식
-                threads = soup.select("a[href*='read.cgi']")
-
-            for t in threads[:30]:
-                if hasattr(t, "get_text"):
-                    title = t.get_text(strip=True)[:100]
-                    href  = t.get("href","") if t.name == "a" else ""
-                else:
-                    a = t.select_one("a")
-                    if not a:
-                        continue
-                    title = a.get_text(strip=True)[:100]
-                    href  = a.get("href","")
-
-                if not title or len(title) < 3:
-                    continue
-                # 猫・ねこ・ニャン 관련만
-                if not any(kw in title for kw in ["猫","ねこ","ニャン","にゃん","ネコ","キャット"]):
-                    pass  # 5ch 猫板 자체가 고양이 판이므로 필터 완화
-
-                full_url = href if href.startswith("http") else f"https://neko.5ch.net{href}"
-                results.append({
-                    "date":       TODAY,
-                    "source":     "5ch_cat",
-                    "category":   "cat_board",
-                    "title":      title,
-                    "content":    "",
-                    "url":        full_url or url,
-                    "views":      0, "likes": 0, "comments": 0,
-                    "crawled_at": now,
-                })
-            break  # 첫 번째 성공하면 중단
-
-        except Exception as e:
-            print(f"  [5ch {board_id}] {e}")
-
-    print(f"  ✅ 5ch 猫板: {len(results)}개 수집")
-    return results
-
-
-# ── 2. ガールズちゃんねる 猫カテゴリ ──────────────────────────────────────
-def crawl_girlschannel_cat() -> list[dict]:
-    """ガールズちゃんねる — 猫・ペット 토픽 수집 (여성 집사 공감 포인트)"""
-    results = []
-    now = datetime.now().isoformat()
-
-    search_urls = [
-        ("cat_search", "https://girlschannel.net/topics/search/?q=%E7%8C%AB"),       # 猫
-        ("pet_search", "https://girlschannel.net/topics/search/?q=%E3%83%9A%E3%83%83%E3%83%88%E7%8C%AB"),  # ペット猫
-    ]
-
-    for source_id, url in search_urls:
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=15)
-            resp.encoding = "utf-8"
-            soup = BeautifulSoup(resp.text, "html.parser")
-
-            topics = soup.select("article.topic") or soup.select("li.topic-item")
-            if not topics:
-                topics = soup.select("div.topic-list-item")
-
-            for topic in topics[:20]:
-                title_el = topic.select_one("h2") or topic.select_one("h3") or topic.select_one(".topic-title")
-                link_el  = topic.select_one("a[href*='/topics/']")
-                count_el = topic.select_one(".count") or topic.select_one(".comment-count")
-
-                if not title_el:
-                    continue
-
-                title  = title_el.get_text(strip=True)[:100]
-                href   = link_el.get("href","") if link_el else ""
-                full_url = f"https://girlschannel.net{href}" if href.startswith("/") else href
-                comments = _parse_int(count_el)
-
-                results.append({
-                    "date":       TODAY,
-                    "source":     "girlschannel",
-                    "category":   "cat_women",
-                    "title":      title,
-                    "content":    "",
-                    "url":        full_url or url,
-                    "views":      0, "likes": 0,
-                    "comments":   comments,
-                    "crawled_at": now,
-                })
-            time.sleep(random.uniform(1.0, 2.0))
-
-        except Exception as e:
-            print(f"  [ガールズちゃんねる {source_id}] {e}")
-
-    print(f"  ✅ ガールズちゃんねる: {len(results)}개 수집")
-    return results
-
-
-# ── 3. ニコニコ動画 猫 인기영상 ───────────────────────────────────────────
-def crawl_nicovideo_cat() -> list[dict]:
-    """ニコニコ動画 — 猫 태그 인기영상 수집 (탄막 공감 타이밍 분석용)"""
-    results = []
-    now = datetime.now().isoformat()
-
-    # ニコニコ 검색 API (공개)
-    api_url = "https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search"
-    params = {
-        "q":        "猫 集合",
-        "targets":  "tags",
-        "fields":   "contentId,title,description,viewCounter,commentCounter,likeCounter,tags",
-        "filters[genre][0]": "動物",
-        "_sort":    "-viewCounter",
-        "_limit":   20,
-        "_context": "mochi-nyang-crawler",
-    }
-
-    try:
-        resp = requests.get(api_url, params=params, headers=HEADERS, timeout=15)
-        data = resp.json()
-
-        for item in data.get("data", []):
-            video_id = item.get("contentId","")
-            results.append({
-                "date":       TODAY,
-                "source":     "nicovideo",
-                "category":   "cat_video",
-                "title":      item.get("title","")[:100],
-                "content":    item.get("description","")[:200],
-                "url":        f"https://www.nicovideo.jp/watch/{video_id}",
-                "views":      item.get("viewCounter", 0),
-                "likes":      item.get("likeCounter", 0),
-                "comments":   item.get("commentCounter", 0),
-                "crawled_at": now,
-            })
-
-    except Exception as e:
-        print(f"  [ニコニコ API] {e} — 일반 검색 시도")
-        # 폴백: 웹 스크래핑
-        try:
-            url = "https://www.nicovideo.jp/search/%E7%8C%AB?sort=h&order=d"
-            resp = requests.get(url, headers=HEADERS, timeout=15)
-            soup = BeautifulSoup(resp.text, "html.parser")
-            items = soup.select("li.VideoItem") or soup.select("div.item")
-            for item in items[:15]:
-                title_el = item.select_one(".VideoItem-title") or item.select_one("p.title")
-                link_el  = item.select_one("a[href*='/watch/']")
-                if not title_el:
-                    continue
-                href = link_el.get("href","") if link_el else ""
+            for item in data.get("data", []):
+                vid = item.get("contentId","")
                 results.append({
                     "date":       TODAY,
                     "source":     "nicovideo",
-                    "category":   "cat_video",
-                    "title":      title_el.get_text(strip=True)[:100],
-                    "content":    "",
-                    "url":        f"https://www.nicovideo.jp{href}" if href.startswith("/") else href,
-                    "views":      0, "likes": 0, "comments": 0,
+                    "category":   category,
+                    "title":      item.get("title","")[:120],
+                    "content":    item.get("description","")[:200],
+                    "url":        f"https://www.nicovideo.jp/watch/{vid}",
+                    "views":      item.get("viewCounter", 0),
+                    "likes":      item.get("likeCounter", 0),
+                    "comments":   item.get("commentCounter", 0),
                     "crawled_at": now,
                 })
-        except Exception as e2:
-            print(f"  [ニコニコ 폴백] {e2}")
+            time.sleep(random.uniform(0.8, 1.5))
+        except Exception as e:
+            print(f"  [ニコニコ '{q_text}'] {e}")
 
     print(f"  ✅ ニコニコ動画: {len(results)}개 수집")
     return results
 
 
-# ── 4. Google Trends 일본 반려묘 키워드 ───────────────────────────────────
-def crawl_google_trends_jp() -> list[dict]:
-    """Google Trends — 일본(JP) 반려묘 관련 키워드 트렌드"""
+# ── 2. はてなブックマーク 猫 태그 (공개 RSS API) ──────────────────────────
+def crawl_hatena_cat() -> list[dict]:
+    """はてなブックマーク — 猫 태그 인기 기사 (해외 IP 허용 공개 API)"""
     results = []
     now = datetime.now().isoformat()
 
-    JP_CAT_KEYWORDS = [
-        "猫 ご飯", "キャットフード", "猫砂", "猫 病院",
-        "去勢手術", "猫 おやつ", "ツンデレ猫", "テレワーク 猫",
-        "猫 物価", "ペットフード 値上がり",
+    feeds = [
+        ("hatena_cat",  f"https://b.hatena.ne.jp/q/{quote('猫')}?mode=rss&sort=popular"),
+        ("hatena_neko", f"https://b.hatena.ne.jp/q/{quote('ねこ')}?mode=rss&sort=popular"),
+        ("hatena_pet",  f"https://b.hatena.ne.jp/q/{quote('ペット 猫')}?mode=rss&sort=popular"),
+    ]
+
+    for source_id, url in feeds:
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=15)
+            resp.encoding = "utf-8"
+
+            root = ET.fromstring(resp.text)
+            ns = {"rss": "http://purl.org/rss/1.0/",
+                  "dc":  "http://purl.org/dc/elements/1.1/"}
+
+            items = root.findall(".//item") or root.findall(".//rss:item", ns)
+
+            for item in items[:20]:
+                title = (item.findtext("title") or
+                         item.findtext("rss:title", namespaces=ns) or "").strip()
+                link  = (item.findtext("link") or
+                         item.findtext("rss:link", namespaces=ns) or "").strip()
+                desc  = (item.findtext("description") or "").strip()[:200]
+
+                if not title or not link:
+                    continue
+
+                results.append({
+                    "date":       TODAY,
+                    "source":     source_id,
+                    "category":   "cat_news",
+                    "title":      title[:120],
+                    "content":    desc,
+                    "url":        link,
+                    "views":      0, "likes": 0, "comments": 0,
+                    "crawled_at": now,
+                })
+            time.sleep(random.uniform(0.5, 1.2))
+
+        except Exception as e:
+            print(f"  [はてな {source_id}] {e}")
+
+    print(f"  ✅ はてなブックマーク: {len(results)}개 수집")
+    return results
+
+
+# ── 3. Yahoo Japan 뉴스 RSS — 猫 ──────────────────────────────────────────
+def crawl_yahoo_japan_cat() -> list[dict]:
+    """Yahoo Japan RSS — 猫 관련 뉴스/트렌드"""
+    results = []
+    now = datetime.now().isoformat()
+
+    feeds = [
+        ("yahoo_cat_news", "https://news.yahoo.co.jp/rss/topics/domestic.xml"),
+        ("yahoo_animal",   "https://news.yahoo.co.jp/rss/categories/domestic.xml"),
+    ]
+
+    CAT_KEYWORDS = ["猫","ねこ","ネコ","キャット","ペット","にゃん","集合","里親"]
+
+    for source_id, url in feeds:
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=15)
+            resp.encoding = "utf-8"
+            root = ET.fromstring(resp.text)
+            items = root.findall(".//item")
+
+            for item in items:
+                title = (item.findtext("title") or "").strip()
+                link  = (item.findtext("link") or "").strip()
+                desc  = (item.findtext("description") or "").strip()[:200]
+
+                # 고양이 관련 기사만 필터
+                if not any(kw in title + desc for kw in CAT_KEYWORDS):
+                    continue
+
+                results.append({
+                    "date":       TODAY,
+                    "source":     source_id,
+                    "category":   "cat_news_jp",
+                    "title":      title[:120],
+                    "content":    desc,
+                    "url":        link,
+                    "views":      0, "likes": 0, "comments": 0,
+                    "crawled_at": now,
+                })
+            time.sleep(0.5)
+
+        except Exception as e:
+            print(f"  [Yahoo Japan {source_id}] {e}")
+
+    print(f"  ✅ Yahoo Japan RSS: {len(results)}개 수집")
+    return results
+
+
+# ── 4. Google Trends JP — 반려묘 키워드 ───────────────────────────────────
+def crawl_google_trends_jp() -> list[dict]:
+    """Google Trends JP — 猫 관련 키워드 트렌드 (재시도 로직 포함)"""
+    results = []
+    now = datetime.now().isoformat()
+
+    JP_KEYWORDS = [
+        "猫 ご飯", "キャットフード", "猫砂",
+        "ツンデレ猫", "テレワーク 猫", "ペットフード 値上がり",
     ]
 
     try:
         from pytrends.request import TrendReq
-        pytrends = TrendReq(hl="ja-JP", tz=540)
+        pytrends = TrendReq(hl="ja-JP", tz=540, timeout=(10,25),
+                            retries=2, backoff_factor=0.5)
 
-        for i in range(0, len(JP_CAT_KEYWORDS), 5):
-            batch = JP_CAT_KEYWORDS[i:i+5]
-            pytrends.build_payload(batch, geo="JP", timeframe="now 7-d")
-            data = pytrends.interest_over_time()
-
-            if not data.empty:
-                latest = data.iloc[-1]
-                for rank, kw in enumerate(batch, start=i+1):
-                    if kw in latest:
-                        results.append({
-                            "date":       TODAY,
-                            "source":     "google_trends_jp",
-                            "keyword":    kw,
-                            "rank":       int(latest[kw]),
-                            "related":    [],
-                            "crawled_at": now,
-                        })
-            time.sleep(random.uniform(1.5, 2.5))
-
-        # 급상승 키워드
-        pytrends.build_payload(["猫"], geo="JP", timeframe="now 7-d")
-        related = pytrends.related_queries()
-        if "猫" in related and related["猫"]["rising"] is not None:
-            for idx, row in related["猫"]["rising"].head(10).iterrows():
-                results.append({
-                    "date":       TODAY,
-                    "source":     "google_trends_jp_rising",
-                    "keyword":    row["query"],
-                    "rank":       idx + 1,
-                    "related":    [],
-                    "crawled_at": now,
-                })
+        # 3개씩 배치 (429 방지)
+        for i in range(0, len(JP_KEYWORDS), 3):
+            batch = JP_KEYWORDS[i:i+3]
+            try:
+                pytrends.build_payload(batch, geo="JP", timeframe="now 7-d")
+                data = pytrends.interest_over_time()
+                if not data.empty:
+                    latest = data.iloc[-1]
+                    for rank, kw in enumerate(batch, start=i+1):
+                        if kw in latest:
+                            results.append({
+                                "date":       TODAY,
+                                "source":     "google_trends_jp",
+                                "keyword":    kw,
+                                "rank":       int(latest[kw]),
+                                "related":    [],
+                                "crawled_at": now,
+                            })
+                time.sleep(random.uniform(3.0, 5.0))  # 429 방지 대기
+            except Exception as e:
+                print(f"  [Trends 배치{i}] {e}")
+                time.sleep(10)
 
     except ImportError:
         print("  [Google Trends] pytrends 미설치")
@@ -340,56 +290,41 @@ def crawl_google_trends_jp() -> list[dict]:
     return results
 
 
-# ── 5. Twitter/X 일본 猫 트렌드 (공개 트렌드 페이지) ─────────────────────
-def crawl_twitter_cat_trends() -> list[dict]:
-    """Twitter/X — 猫 관련 공개 트렌드 수집 (API 없이)"""
+# ── 5. ニコニコ 급상승 태그 트렌드 ───────────────────────────────────────
+def crawl_nicovideo_trends() -> list[dict]:
+    """ニコニコ動画 — 猫 관련 인기 태그 수집 (트렌드 대용)"""
     results = []
     now = datetime.now().isoformat()
 
-    # Nitter 미러 (X API 없이 접근 가능한 공개 인스턴스)
-    nitter_instances = [
-        "https://nitter.net/search?q=%E7%8C%AB&f=tweets",
-        "https://nitter.1d4.us/search?q=%E7%8C%AB",
-    ]
+    try:
+        url = "https://www.nicovideo.jp/tag/%E7%8C%AB?sort=h&order=d"
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        soup = BeautifulSoup(resp.text, "html.parser")
 
-    for url in nitter_instances:
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=10)
-            if resp.status_code != 200:
-                continue
-            soup = BeautifulSoup(resp.text, "html.parser")
-            tweets = soup.select("div.tweet-content") or soup.select("p.tweet-text")
-            for tw in tweets[:20]:
-                text = tw.get_text(strip=True)[:150]
-                if text:
-                    results.append({
-                        "date":       TODAY,
-                        "source":     "twitter_nitter",
-                        "category":   "cat_twitter",
-                        "title":      text,
-                        "content":    "",
-                        "url":        url,
-                        "views":      0, "likes": 0, "comments": 0,
-                        "crawled_at": now,
-                    })
-            if results:
-                break
-        except Exception as e:
-            print(f"  [Twitter Nitter] {e}")
+        # JSON-LD 또는 메타 태그에서 인기 태그 추출
+        scripts = soup.find_all("script", type="application/ld+json")
+        for script in scripts:
+            try:
+                data = json.loads(script.string)
+                keywords = data.get("keywords", [])
+                if isinstance(keywords, list):
+                    for rank, kw in enumerate(keywords[:15], start=1):
+                        results.append({
+                            "date":       TODAY,
+                            "source":     "nicovideo_tags",
+                            "keyword":    kw,
+                            "rank":       rank,
+                            "related":    [],
+                            "crawled_at": now,
+                        })
+            except Exception:
+                pass
 
-    if not results:
-        print("  ℹ️  Twitter: Nitter 인스턴스 불안정 — 스킵")
+    except Exception as e:
+        print(f"  [ニコニコ tags] {e}")
 
-    print(f"  ✅ Twitter/X: {len(results)}개 수집")
+    print(f"  ✅ ニコニコ 태그 트렌드: {len(results)}개 수집")
     return results
-
-
-# ── 헬퍼 ──────────────────────────────────────────────────────────────────
-def _parse_int(el) -> int:
-    if not el:
-        return 0
-    txt = re.sub(r"[^\d]", "", el.get_text())
-    return int(txt) if txt else 0
 
 
 # ── 메인 ──────────────────────────────────────────────────────────────────
@@ -402,20 +337,20 @@ def main():
     all_posts  = []
     all_trends = []
 
-    print("\n[1/5] 5ch 猫板...")
-    all_posts += crawl_5ch_cat()
+    print("\n[1/5] ニコニコ動画 인기영상...")
+    all_posts += crawl_nicovideo()
 
-    print("\n[2/5] ガールズちゃんねる...")
-    all_posts += crawl_girlschannel_cat()
+    print("\n[2/5] はてなブックマーク 猫...")
+    all_posts += crawl_hatena_cat()
 
-    print("\n[3/5] ニコニコ動画...")
-    all_posts += crawl_nicovideo_cat()
+    print("\n[3/5] Yahoo Japan RSS 猫뉴스...")
+    all_posts += crawl_yahoo_japan_cat()
 
     print("\n[4/5] Google Trends JP...")
     all_trends += crawl_google_trends_jp()
 
-    print("\n[5/5] Twitter/X (공개)...")
-    all_posts += crawl_twitter_cat_trends()
+    print("\n[5/5] ニコニコ 태그 트렌드...")
+    all_trends += crawl_nicovideo_trends()
 
     saved = save_posts(all_posts)
     save_trends(all_trends)
@@ -428,8 +363,9 @@ def main():
         "sources":     list({p["source"] for p in all_posts}),
         "crawled_at":  datetime.now().isoformat(),
     }
-    summary_path = DATA_DIR / f"{TODAY}_crawl_summary.json"
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
+    (DATA_DIR / f"{TODAY}_crawl_summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2)
+    )
 
     print(f"\n{'='*55}")
     print(f"  ✅ 완료: 게시글 {saved}개 저장, 트렌드 {len(all_trends)}개")
