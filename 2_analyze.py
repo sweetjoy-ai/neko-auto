@@ -10,7 +10,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-import google.generativeai as genai
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR  = BASE_DIR / "data"
@@ -48,8 +49,9 @@ def load_today_trends() -> list[dict]:
 
 # ── Gemini 분석 ────────────────────────────────────────────────────────────
 def run_keyword_analysis(posts: list[dict], trends: list[dict]) -> str:
+    import google.generativeai as genai
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
     posts_text = "\n".join(
         f"- [{p['source']}] {p['title']} (👍{p['likes']} 👁{p['views']})"
@@ -101,8 +103,9 @@ def run_keyword_analysis(posts: list[dict], trends: list[dict]) -> str:
 # ── 에피소드 대본 생성 ─────────────────────────────────────────────────────
 def generate_episode_script(idea: str) -> str:
     """선택된 에피소드 아이디어로 일본어 숏폼 대본 생성"""
+    import google.generativeai as genai
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
     prompt = f"""
 당신은 일본어 숏폼 유튜브 채널의 대본 작가입니다.

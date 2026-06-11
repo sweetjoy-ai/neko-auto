@@ -3,6 +3,7 @@ neko-auto — Streamlit 대시보드
 실행: streamlit run dashboard.py --server.port 8502 --server.baseUrlPath youtube/mochi-nyang
 """
 
+import base64
 import json
 import os
 import sqlite3
@@ -79,22 +80,36 @@ header[data-testid="stHeader"] { background: #faf7f2 !important; border-bottom: 
 
 # ── 브레드크럼 ─────────────────────────────────────────────────────────────
 st.markdown("""
-<div style="font-size:12px; color:#a89880; padding:8px 0 4px; border-bottom:1px solid #e8e0d4; margin-bottom:20px;">
-  <a href="https://spacejoy.withlinkus.com" style="color:#b8895a; text-decoration:none;">main</a>
-  <span style="margin:0 6px; color:#d0c8be;">›</span>
+<div style="font-size:12px; color:#a89880; padding:8px 0 12px; border-bottom:1px solid #e8e0d4; margin-bottom:24px;">
+  <a href="https://spacejoy.withlinkus.com" style="color:#b8895a; text-decoration:none; transition:opacity 0.2s;">🏠 home</a>
+  <span style="margin:0 8px; color:#d0c8be;">›</span>
   <a href="https://spacejoy.withlinkus.com/youtube" style="color:#b8895a; text-decoration:none;">youtube</a>
-  <span style="margin:0 6px; color:#d0c8be;">›</span>
-  <span style="color:#2a2118;">모찌냥</span>
+  <span style="margin:0 8px; color:#d0c8be;">›</span>
+  <span style="color:#2a2118; font-weight:500;">모찌냥</span>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-<div style="margin-bottom:24px;">
-  <div style="font-size:11px; color:#a89880; letter-spacing:2px; text-transform:uppercase; margin-bottom:6px;">YouTube · Channel</div>
-  <div style="font-family:'DM Serif Display',serif; font-size:32px; font-style:italic; color:#2a2118; letter-spacing:-0.5px;">🐱 모찌냥</div>
-  <div style="font-size:13px; color:#a89880; margin-top:4px;">일본어 숏폼 채널 — 반려묘 집사 공감 콘텐츠 자동화</div>
-</div>
-""", unsafe_allow_html=True)
+# ── 캐릭터 헤더 ────────────────────────────────────────────────────────────
+CHAR_IMG = BASE_DIR / "static" / "mochi.png"
+col_img, col_title = st.columns([1, 6])
+with col_img:
+    if CHAR_IMG.exists():
+        img_b64 = base64.b64encode(CHAR_IMG.read_bytes()).decode()
+        st.markdown(
+            f'<img src="data:image/png;base64,{img_b64}" '
+            f'style="width:90px; height:90px; object-fit:contain; margin-top:4px;">',
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown('<div style="font-size:64px; line-height:1;">🐱</div>', unsafe_allow_html=True)
+with col_title:
+    st.markdown("""
+    <div style="padding-top:8px;">
+      <div style="font-size:11px; color:#a89880; letter-spacing:2px; text-transform:uppercase; margin-bottom:4px;">YouTube · 일본어 숏폼</div>
+      <div style="font-family:'DM Serif Display',serif; font-size:30px; font-style:italic; color:#2a2118;">모찌냥</div>
+      <div style="font-size:12px; color:#a89880; margin-top:2px;">반려묘 집사 공감 콘텐츠 자동화</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ── 날짜 선택 ──────────────────────────────────────────────────────────────
 col_date, col_refresh = st.columns([3, 1])
