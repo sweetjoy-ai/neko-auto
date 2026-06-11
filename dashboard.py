@@ -21,7 +21,7 @@ DATA_DIR.mkdir(exist_ok=True)
 TODAY = datetime.now().strftime("%y%m%d")
 
 st.set_page_config(
-    page_title="neko-auto | Spacejoy",
+    page_title="모찌냥 | Spacejoy",
     page_icon="🐱",
     layout="wide",
 )
@@ -29,26 +29,72 @@ st.set_page_config(
 # ── 스타일 ─────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&display=swap');
-html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
-.stApp { background: #faf7f2; }
-.block-container { padding-top: 1.5rem; }
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap');
+
+/* 전체 배경 */
+html, body, .stApp, [data-testid="stAppViewContainer"],
+[data-testid="stHeader"], [data-testid="stToolbar"],
+[data-testid="stSidebar"] > div:first-child,
+[data-testid="stDecoration"] {
+    background: #faf7f2 !important;
+    font-family: 'Noto Sans KR', sans-serif;
+}
+
+/* Streamlit 상단 보라색 바 제거 */
+[data-testid="stDecoration"] { display: none !important; }
+header[data-testid="stHeader"] { background: #faf7f2 !important; border-bottom: 1px solid #e8e0d4; }
+
+/* 메인 컨텐츠 영역 */
+.block-container { padding-top: 1rem !important; max-width: 1100px; }
+
+/* 사이드바 */
+[data-testid="stSidebar"] { background: #f4efe6 !important; border-right: 1px solid #e8e0d4; }
+
+/* expander */
+[data-testid="stExpander"] {
+    border: 1px solid #e8e0d4 !important;
+    border-radius: 12px !important;
+    background: #fffefb !important;
+    margin-bottom: 8px;
+}
+
+/* 버튼 */
+.stButton > button {
+    background: #b8895a !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-family: 'Noto Sans KR', sans-serif !important;
+}
+.stButton > button:hover { background: #a07848 !important; }
+
+/* 텍스트 입력 */
+.stTextInput > div > div > input {
+    background: #fffefb !important;
+    border: 1px solid #e8e0d4 !important;
+    border-radius: 8px !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ── 브레드크럼 ─────────────────────────────────────────────────────────────
 st.markdown("""
-<div style="font-size:12px; color:#999; padding:8px 0 4px; border-bottom:1px solid #eee; margin-bottom:16px;">
+<div style="font-size:12px; color:#a89880; padding:8px 0 4px; border-bottom:1px solid #e8e0d4; margin-bottom:20px;">
   <a href="https://spacejoy.withlinkus.com" style="color:#b8895a; text-decoration:none;">main</a>
-  <span style="margin:0 6px; color:#ccc;">›</span>
+  <span style="margin:0 6px; color:#d0c8be;">›</span>
   <a href="https://spacejoy.withlinkus.com/youtube" style="color:#b8895a; text-decoration:none;">youtube</a>
-  <span style="margin:0 6px; color:#ccc;">›</span>
-  <span style="color:#555;">mochi-nyang</span>
+  <span style="margin:0 6px; color:#d0c8be;">›</span>
+  <span style="color:#2a2118;">모찌냥</span>
 </div>
 """, unsafe_allow_html=True)
 
-st.title("🐱 neko-auto")
-st.caption("일본어 숏폼 채널 — 반려묘 집사 공감 콘텐츠 자동화")
+st.markdown("""
+<div style="margin-bottom:24px;">
+  <div style="font-size:11px; color:#a89880; letter-spacing:2px; text-transform:uppercase; margin-bottom:6px;">YouTube · Channel</div>
+  <div style="font-family:'DM Serif Display',serif; font-size:32px; font-style:italic; color:#2a2118; letter-spacing:-0.5px;">🐱 모찌냥</div>
+  <div style="font-size:13px; color:#a89880; margin-top:4px;">일본어 숏폼 채널 — 반려묘 집사 공감 콘텐츠 자동화</div>
+</div>
+""", unsafe_allow_html=True)
 
 # ── 날짜 선택 ──────────────────────────────────────────────────────────────
 col_date, col_refresh = st.columns([3, 1])
