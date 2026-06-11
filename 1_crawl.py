@@ -144,48 +144,44 @@ def crawl_nicovideo() -> list[dict]:
 
 # ── 2. はてなブックマーク 猫 태그 (공개 RSS API) ──────────────────────────
 def crawl_hatena_cat() -> list[dict]:
-    """はてなブックマーク — 猫 태그 인기 기사 (해외 IP 허용 공개 API)"""
+    """はてなブックマーク — 猫 태그 인기 기사 (BS4 XML 파서 사용)"""
     results = []
     now = datetime.now().isoformat()
 
     feeds = [
         ("hatena_cat",  f"https://b.hatena.ne.jp/q/{quote('猫')}?mode=rss&sort=popular"),
         ("hatena_neko", f"https://b.hatena.ne.jp/q/{quote('ねこ')}?mode=rss&sort=popular"),
-        ("hatena_pet",  f"https://b.hatena.ne.jp/q/{quote('ペット 猫')}?mode=rss&sort=popular"),
     ]
 
     for source_id, url in feeds:
         try:
             resp = requests.get(url, headers=HEADERS, timeout=15)
             resp.encoding = "utf-8"
+            soup = BeautifulSoup(resp.text, "lxml-xml")  # XML 파서
 
-            root = ET.fromstring(resp.text)
-            ns = {"rss": "http://purl.org/rss/1.0/",
-                  "dc":  "http://purl.org/dc/elements/1.1/"}
+            for item in soup.find_all("item")[:20]:
+                title = item.find("title")
+                link  = item.find("link") or item.find("guid")
+                desc  = item.find("description")
 
-            items = root.findall(".//item") or root.findall(".//rss:item", ns)
+                t = title.get_text(strip=True) if title else ""
+                l = link.get_text(strip=True) if link else ""
+                d = desc.get_text(strip=True)[:200] if desc else ""
 
-            for item in items[:20]:
-                title = (item.findtext("title") or
-                         item.findtext("rss:title", namespaces=ns) or "").strip()
-                link  = (item.findtext("link") or
-                         item.findtext("rss:link", namespaces=ns) or "").strip()
-                desc  = (item.findtext("description") or "").strip()[:200]
-
-                if not title or not link:
+                if not t or not l:
                     continue
 
                 results.append({
                     "date":       TODAY,
                     "source":     source_id,
                     "category":   "cat_news",
-                    "title":      title[:120],
-                    "content":    desc,
-                    "url":        link,
+                    "title":      t[:120],
+                    "content":    d,
+                    "url":        l,
                     "views":      0, "likes": 0, "comments": 0,
                     "crawled_at": now,
                 })
-            time.sleep(random.uniform(0.5, 1.2))
+            time.sleep(random.uniform(0.8, 1.5))
 
         except Exception as e:
             print(f"  [はてな {source_id}] {e}")
@@ -196,49 +192,51 @@ def crawl_hatena_cat() -> list[dict]:
 
 # ── 3. Yahoo Japan 뉴스 RSS — 猫 ──────────────────────────────────────────
 def crawl_yahoo_japan_cat() -> list[dict]:
-    """Yahoo Japan RSS — 猫 관련 뉴스/트렌드"""
+    """Yahoo Japan — 猫 키워드 뉴스 검색 (RSS)"""
     results = []
     now = datetime.now().isoformat()
 
-    feeds = [
-        ("yahoo_cat_news", "https://news.yahoo.co.jp/rss/topics/domestic.xml"),
-        ("yahoo_animal",   "https://news.yahoo.co.jp/rss/categories/domestic.xml"),
-    ]
+    # Yahoo Japan 뉴스 검索 RSS
+    search_terms = ["猫", "ねこ 集合", "ペット 猫"]
+    CAT_KEYWORDS = ["猫","ねこ","ネコ","キャット","ペット","にゃん","里親","保護猫"]
 
-    CAT_KEYWORDS = ["猫","ねこ","ネコ","キャット","ペット","にゃん","集合","里親"]
-
-    for source_id, url in feeds:
+    for term in search_terms:
+        url = f"https://news.yahoo.co.jp/search?p={quote(term)}&ei=UTF-8&rs=rss"
         try:
             resp = requests.get(url, headers=HEADERS, timeout=15)
             resp.encoding = "utf-8"
-            root = ET.fromstring(resp.text)
-            items = root.findall(".//item")
+            soup = BeautifulSoup(resp.text, "lxml-xml")
 
-            for item in items:
-                title = (item.findtext("title") or "").strip()
-                link  = (item.findtext("link") or "").strip()
-                desc  = (item.findtext("description") or "").strip()[:200]
+            for item in soup.find_all("item")[:15]:
+                title = item.find("title")
+                link  = item.find("link") or item.find("guid")
+                desc  = item.find("description")
 
-                # 고양이 관련 기사만 필터
-                if not any(kw in title + desc for kw in CAT_KEYWORDS):
+                t = title.get_text(strip=True) if title else ""
+                l = link.get_text(strip=True) if link else ""
+                d = desc.get_text(strip=True)[:200] if desc else ""
+
+                if not t or not l:
+                    continue
+                if not any(kw in t + d for kw in CAT_KEYWORDS):
                     continue
 
                 results.append({
                     "date":       TODAY,
-                    "source":     source_id,
+                    "source":     "yahoo_jp",
                     "category":   "cat_news_jp",
-                    "title":      title[:120],
-                    "content":    desc,
-                    "url":        link,
+                    "title":      t[:120],
+                    "content":    d,
+                    "url":        l,
                     "views":      0, "likes": 0, "comments": 0,
                     "crawled_at": now,
                 })
-            time.sleep(0.5)
+            time.sleep(1.0)
 
         except Exception as e:
-            print(f"  [Yahoo Japan {source_id}] {e}")
+            print(f"  [Yahoo Japan '{term}'] {e}")
 
-    print(f"  ✅ Yahoo Japan RSS: {len(results)}개 수집")
+    print(f"  ✅ Yahoo Japan: {len(results)}개 수집")
     return results
 
 
@@ -255,8 +253,7 @@ def crawl_google_trends_jp() -> list[dict]:
 
     try:
         from pytrends.request import TrendReq
-        pytrends = TrendReq(hl="ja-JP", tz=540, timeout=(10,25),
-                            retries=2, backoff_factor=0.5)
+        pytrends = TrendReq(hl="ja-JP", tz=540, timeout=(10,25))
 
         # 3개씩 배치 (429 방지)
         for i in range(0, len(JP_KEYWORDS), 3):
