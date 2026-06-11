@@ -1,0 +1,9 @@
+streamlit>=1.35
+requests>=2.31
+beautifulsoup4>=4.12
+google-generativeai>=0.7
+pytrends>=4.9
+yt-dlp>=2024.1
+python-telegram-bot>=20.0
+apscheduler>=3.10
+lxml>=5.0
