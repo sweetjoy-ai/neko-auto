@@ -40,13 +40,15 @@ HEADERS = {
 # ── DB 초기화 ──────────────────────────────────────────────────────────────
 def init_db():
     conn = sqlite3.connect(DB_PATH)
+    # 기존 테이블이 url UNIQUE라면 재생성
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS posts (
+        CREATE TABLE IF NOT EXISTS posts_v2 (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT, source TEXT, category TEXT,
-            title TEXT, content TEXT, url TEXT UNIQUE,
+            title TEXT, content TEXT, url TEXT,
             views INTEGER DEFAULT 0, likes INTEGER DEFAULT 0,
-            comments INTEGER DEFAULT 0, crawled_at TEXT
+            comments INTEGER DEFAULT 0, crawled_at TEXT,
+            UNIQUE(date, url)
         )
     """)
     conn.execute("""
@@ -56,6 +58,13 @@ def init_db():
             rank INTEGER, related TEXT, crawled_at TEXT
         )
     """)
+    # 구버전 posts 테이블이 있으면 데이터 이전 후 교체
+    tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+    if "posts" in tables and "posts_v2" in tables:
+        conn.execute("INSERT OR IGNORE INTO posts_v2 SELECT * FROM posts")
+        conn.execute("DROP TABLE posts")
+    if "posts_v2" in tables:
+        conn.execute("ALTER TABLE posts_v2 RENAME TO posts") if "posts" not in tables else None
     conn.commit()
     conn.close()
 
@@ -149,15 +158,16 @@ def crawl_hatena_cat() -> list[dict]:
     now = datetime.now().isoformat()
 
     feeds = [
-        ("hatena_cat",  f"https://b.hatena.ne.jp/q/{quote('猫')}?mode=rss&sort=popular"),
-        ("hatena_neko", f"https://b.hatena.ne.jp/q/{quote('ねこ')}?mode=rss&sort=popular"),
+        ("hatena_cat",  f"https://b.hatena.ne.jp/search/text?q={quote('猫')}&users=10&mode=rss"),
+        ("hatena_neko", f"https://b.hatena.ne.jp/search/text?q={quote('ねこ+集合')}&users=5&mode=rss"),
+        ("hatena_pet",  f"https://b.hatena.ne.jp/search/text?q={quote('保護猫')}&users=5&mode=rss"),
     ]
 
     for source_id, url in feeds:
         try:
             resp = requests.get(url, headers=HEADERS, timeout=15)
             resp.encoding = "utf-8"
-            soup = BeautifulSoup(resp.text, "lxml-xml")  # XML 파서
+            soup = BeautifulSoup(resp.text, "lxml-xml")
 
             for item in soup.find_all("item")[:20]:
                 title = item.find("title")
