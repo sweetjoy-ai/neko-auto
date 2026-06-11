@@ -94,18 +94,22 @@ st.markdown("""
 
 # ── 캐릭터 헤더 ────────────────────────────────────────────────────────────
 CHAR_IMG = BASE_DIR / "static" / "mochi.png"
-col_img, col_title = st.columns([1, 6])
-with col_img:
-    if CHAR_IMG.exists():
-        st.image(str(CHAR_IMG), width=100)
-    else:
-        st.markdown('<div style="font-size:64px; line-height:1; padding-top:8px;">🐱</div>', unsafe_allow_html=True)
-with col_title:
+if CHAR_IMG.exists():
+    col_img, col_info = st.columns([1, 5])
+    with col_img:
+        st.image(str(CHAR_IMG), width=120)
+    with col_info:
+        st.markdown("""
+        <div style="padding-top:20px;">
+          <div style="font-size:11px; color:#a89880; letter-spacing:2px; text-transform:uppercase; margin-bottom:6px;">YouTube · 일본어 숏폼</div>
+          <div style="font-size:13px; color:#a89880;">반려묘 집사 공감 콘텐츠 자동화</div>
+        </div>
+        """, unsafe_allow_html=True)
+else:
     st.markdown("""
-    <div style="padding-top:12px;">
-      <div style="font-size:11px; color:#a89880; letter-spacing:2px; text-transform:uppercase; margin-bottom:4px;">YouTube · 일본어 숏폼</div>
-      <div style="font-family:'DM Serif Display',serif; font-size:30px; font-style:italic; color:#2a2118;">모찌냥</div>
-      <div style="font-size:12px; color:#a89880; margin-top:2px;">반려묘 집사 공감 콘텐츠 자동화</div>
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px; color:#a89880; letter-spacing:2px; text-transform:uppercase; margin-bottom:6px;">YouTube · 일본어 숏폼</div>
+      <div style="font-size:13px; color:#a89880;">반려묘 집사 공감 콘텐츠 자동화</div>
     </div>
     """, unsafe_allow_html=True)
 
