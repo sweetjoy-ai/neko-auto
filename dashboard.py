@@ -84,7 +84,7 @@ header[data-testid="stHeader"] *{ display: none !important; }
 # ── 브레드크럼 ─────────────────────────────────────────────────────────────
 st.markdown("""
 <div style="font-size:12px; color:#a89880; padding:8px 0 12px; border-bottom:1px solid #e8e0d4; margin-bottom:24px;">
-  <a href="https://spacejoy.withlinkus.com" style="color:#b8895a; text-decoration:none; transition:opacity 0.2s;">🏠 home</a>
+  <a href="https://spacejoy.withlinkus.com" style="color:#b8895a; text-decoration:none; transition:opacity 0.2s;">home</a>
   <span style="margin:0 8px; color:#d0c8be;">›</span>
   <a href="https://spacejoy.withlinkus.com/youtube" style="color:#b8895a; text-decoration:none;">youtube</a>
   <span style="margin:0 8px; color:#d0c8be;">›</span>
